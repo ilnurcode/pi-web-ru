@@ -408,6 +408,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [homeDir, setHomeDir] = useState<string>("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [projectFilter, setProjectFilter] = useState("");
+  const [expandedProjectKey, setExpandedProjectKey] = useState<string | null>(null);
   const [wtFilter, setWtFilter] = useState("");
   const [customPathOpen, setCustomPathOpen] = useState(false);
   const [customPathValue, setCustomPathValue] = useState(loadLastCustomCwd);
@@ -1356,46 +1357,42 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 </div>
               )}
               <div style={{ maxHeight: "min(50vh, 380px)", overflowY: "auto" }}>
-                {visibleProjects.map((project) => (
-                  <button
-                    key={project.key}
-                    onClick={() => {
-                      setSelectedCwd(project.root);
-                      setProjectFilter("");
-                      setCustomPathOpen(false);
-                      setCustomPathError(null);
-                      setDropdownOpen(false);
-                    }}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 7,
-                      width: "100%",
-                      padding: "8px 10px",
-                      background: "var(--bg)",
-                      border: "none",
-                      borderBottom: "1px solid var(--border)",
-                      color: project.key === selectedProject?.key ? "var(--text)" : "var(--text-muted)",
-                      cursor: "pointer",
-                      textAlign: "left",
-                      fontSize: 11,
-                      fontFamily: "var(--font-mono)",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                    title={project.root}
-                  >
-                    {project.key === selectedProject?.key && (
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                        <polyline points="1.5 5 4 7.5 8.5 2.5" />
-                      </svg>
-                    )}
-                    {project.key !== selectedProject?.key && <span style={{ width: 10, flexShrink: 0 }} />}
-                    <PathLabel text={displayCwd(project.root, homeDir)} style={{ flex: 1 }} />
-                    {showProjectActivity(projectActivity.get(project.key), t)}
-                  </button>
-                ))}
+                {visibleProjects.map((project) => {
+                  const expanded = expandedProjectKey === project.key;
+                  const families = listSessionFamilies(sessionsForProject(allSessions, project.key));
+                  return (
+                    <div key={project.key} style={{ borderBottom: "1px solid var(--border)" }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedCwd(project.root);
+                          setExpandedProjectKey(expanded ? null : project.key);
+                          setProjectFilter("");
+                          setCustomPathOpen(false);
+                          setCustomPathError(null);
+                        }}
+                        style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", padding: "8px 10px", background: project.key === selectedProject?.key ? "var(--bg-hover)" : "var(--bg)", border: "none", color: project.key === selectedProject?.key ? "var(--text)" : "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 11, fontFamily: "var(--font-mono)" }}
+                        title={project.root}
+                      >
+                        <span aria-hidden="true" style={{ width: 12, color: "var(--text-dim)" }}>{expanded ? "⌄" : "›"}</span>
+                        <span aria-hidden="true">📁</span>
+                        <PathLabel text={displayCwd(project.root, homeDir)} style={{ flex: 1 }} />
+                        <span style={{ color: "var(--text-dim)", fontSize: 10 }}>{families.length}</span>
+                        {showProjectActivity(projectActivity.get(project.key), t)}
+                      </button>
+                      {expanded && (
+                        <div style={{ padding: "2px 0 5px 29px", background: "var(--bg)" }}>
+                          {families.map((family) => (
+                            <button key={family.root.id} type="button" onClick={() => { onSelectSession(family.root); setDropdownOpen(false); }} title={family.root.name || family.root.firstMessage || family.root.id}
+                              style={{ display: "block", width: "100%", padding: "6px 10px", border: "none", background: "transparent", color: family.root.id === selectedSessionId ? "var(--accent)" : "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {family.root.name || family.root.firstMessage || family.root.id.slice(0, 12)}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
                 {visibleProjects.length === 0 && projectFilter.trim() && (
                    <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-dim)" }}>{t("sidebar.noMatchingProjects")}</div>
                 )}
