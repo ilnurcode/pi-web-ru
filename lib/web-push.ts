@@ -115,7 +115,9 @@ function pushStatusCode(error: unknown): number | undefined {
  * subscribes; unknown locales fall back to English.
  */
 export function localeText(locale: string, key: "sessionComplete" | "taskFinished"): string {
-  const localePlugin = locale === "ru" ? ruLocale : locale === "zh-CN" ? zhCNLocale : enLocale;
+  let localePlugin = enLocale;
+  if (locale === "ru") localePlugin = ruLocale;
+  else if (locale === "zh-CN") localePlugin = zhCNLocale;
   const message = localePlugin.messages[key === "sessionComplete" ? "i18n.sessionComplete" : "i18n.taskFinished"];
   return message ?? (key === "sessionComplete" ? "Session complete" : "Task finished.");
 }
