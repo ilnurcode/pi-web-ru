@@ -409,6 +409,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [projectFilter, setProjectFilter] = useState("");
   const [expandedProjectKey, setExpandedProjectKey] = useState<string | null>(null);
+  const [expandedSidebarProjectKeys, setExpandedSidebarProjectKeys] = useState<Set<string>>(() => new Set());
   const [wtFilter, setWtFilter] = useState("");
   const [customPathOpen, setCustomPathOpen] = useState(false);
   const [customPathValue, setCustomPathValue] = useState(loadLastCustomCwd);
@@ -433,7 +434,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [fileSearchOpen, setFileSearchOpen] = useState(false);
   const [sessionSearchOpen, setSessionSearchOpen] = useState(false);
   const [sessionSearchQuery, setSessionSearchQuery] = useState("");
-  const sessionSearchActive = sessionSearchOpen && Boolean(sessionSearchQuery.trim());
   const [changesCount, setChangesCount] = useState(0);
   const [changesCollapsed, setChangesCollapsed] = useState(true);
   const [explorerRefreshDone, setExplorerRefreshDone] = useState(false);
@@ -451,7 +451,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const explorerRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileExplorerRef = useRef<FileExplorerHandle>(null);
 
-  // Virtualized session list: only the visible window of rows is mounted.
+  // The project tree keeps the normal browser scroll behaviour.
   const listScrollRef = useRef<HTMLDivElement>(null);
   const explorerScrollRef = useRef<HTMLDivElement>(null);
   useScrollbarVisibility(listScrollRef);
@@ -489,37 +489,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     storageKey: "pi-web:sidebar-session-pane-height",
     widthRef: sessionPaneHeightRef,
   });
-  const [listViewportH, setListViewportH] = useState(0);
-  const [listScrollTop, setListScrollTop] = useState(0);
-  const [focusedSessionId, setFocusedSessionId] = useState<string | null>(null);
-  const listScrollRafRef = useRef<number | null>(null);
-  const listScrollTopRef = useRef(0);
-  const renderedListScrollTopRef = useRef(0);
-  const handleListScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    listScrollTopRef.current = e.currentTarget.scrollTop;
-    if (listScrollRafRef.current != null) return;
-    listScrollRafRef.current = requestAnimationFrame(() => {
-      listScrollRafRef.current = null;
-      const nextTop = Math.floor(listScrollTopRef.current / SESSION_LIST_ITEM_HEIGHT) * SESSION_LIST_ITEM_HEIGHT;
-      if (renderedListScrollTopRef.current === nextTop) return;
-      renderedListScrollTopRef.current = nextTop;
-      setListScrollTop(nextTop);
-    });
-  }, []);
-  useLayoutEffect(() => {
-    const el = listScrollRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      for (const entry of entries) setListViewportH(entry.contentRect.height);
-    });
-    ro.observe(el);
-    setListViewportH(el.clientHeight);
-    listScrollTopRef.current = el.scrollTop;
-    renderedListScrollTopRef.current = Math.floor(el.scrollTop / SESSION_LIST_ITEM_HEIGHT) * SESSION_LIST_ITEM_HEIGHT;
-    setListScrollTop(renderedListScrollTopRef.current);
-    return () => ro.disconnect();
-  }, [sessionSearchActive]);
-
   const loadSessions = useCallback(async (showLoading = false, force = false, summary = false) => {
     const loadId = ++sessionLoadIdRef.current;
     try {
@@ -1119,10 +1088,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     [projectActivity, selectedProject],
   );
 
-  const filteredSessions = useMemo(
-    () => selectedProject ? sessionsForProject(allSessions, selectedProject.key) : allSessions,
-    [allSessions, selectedProject],
-  );
   const showWorktreeSwitcher = Boolean(
     worktreeState?.isGit
     && worktreeState.isTopLevel
@@ -1152,14 +1117,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         }
       : null);
 
-  const sessionFamilies = useMemo(() => listSessionFamilies(filteredSessions), [filteredSessions]);
-
-  const virtualIndices = useMemo(() => getSessionListIndices(
-    sessionFamilies.length,
-    listScrollTop,
-    listViewportH,
-    sessionFamilies.findIndex((family) => family.root.id === focusedSessionId),
-  ), [focusedSessionId, listScrollTop, listViewportH, sessionFamilies]);
+  const projectFamilies = useMemo(() => recentProjects.map((project) => ({
+    project,
+    families: listSessionFamilies(sessionsForProject(allSessions, project.key)),
+  })), [allSessions, recentProjects]);
 
   return (
     <div
@@ -1842,7 +1803,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         <SessionSearch open={sessionSearchOpen} query={sessionSearchQuery} selectedSessionId={selectedSessionId} onSelectSession={handleSelectSessionFromList}>
         <div
           ref={listScrollRef}
-          onScroll={handleListScroll}
           className="scrollbar-subtle"
           style={{
             flex: "1 1 auto",
@@ -1861,49 +1821,31 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             {error}
           </div>
         )}
-        {!loading && !error && sessionFamilies.length === 0 && (
-          <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>
-            {t("sidebar.noSessions")}
-          </div>
+        {!loading && !error && projectFamilies.length === 0 && (
+          <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>{t("sidebar.noSessions")}</div>
         )}
-        {sessionFamilies.length > 0 && (
-          <div
-            style={{
-              position: "relative",
-              height: sessionFamilies.length * SESSION_LIST_ITEM_HEIGHT,
-            }}
-          >
-            {virtualIndices.map((index) => {
-              const family = sessionFamilies[index];
-              const familySessions = [family.root, ...family.subagents];
-              const displaySession = family.latestModified === family.root.modified
-                ? family.root
-                : { ...family.root, modified: family.latestModified };
-              // Bubble blur after the input's save handler before unpinning the row.
-              return (
-                <div
-                  key={family.root.id}
-                  onFocus={() => setFocusedSessionId(family.root.id)}
-                  onBlur={() => setFocusedSessionId(null)}
-                  style={{ position: "absolute", top: index * SESSION_LIST_ITEM_HEIGHT, left: 0, right: 0 }}
-                >
-                  <SessionItem
-                    session={displaySession}
-                    isSelected={familySessions.some((session) => session.id === selectedSessionId)}
-                    isRunning={familySessions.some((session) => runningSessionIds.has(session.id))}
-                    isUnread={familySessions.some((session) => unreadSessionIds.has(session.id))}
-                    onClick={() => handleSelectSessionFromList(family.root)}
-                    onRenamed={loadSessions}
-                    onDeleted={(id) => {
-                      onSessionDeleted?.(id);
-                      loadSessions();
-                    }}
-                  />
-                </div>
-              );
-            })}
-          </div>
-        )}
+        {projectFamilies.map(({ project, families }) => {
+          const expanded = expandedSidebarProjectKeys.has(project.key) || project.key === selectedProject?.key;
+          return (
+            <div key={project.key} style={{ borderBottom: "1px solid var(--border)" }}>
+              <button type="button" onClick={() => {
+                setSelectedCwd(project.root);
+                setExpandedSidebarProjectKeys((current) => {
+                  const next = new Set(current);
+                  if (next.has(project.key)) next.delete(project.key); else next.add(project.key);
+                  return next;
+                });
+              }} style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", padding: "9px 10px", border: "none", background: project.key === selectedProject?.key ? "var(--bg-selected)" : "var(--bg-panel)", color: "var(--text)", cursor: "pointer", textAlign: "left", fontSize: 12, fontWeight: 600 }}>
+                <span aria-hidden="true">{expanded ? "⌄" : "›"}</span><span aria-hidden="true">📁</span><PathLabel text={displayCwd(project.root, homeDir)} style={{ flex: 1 }} /><span style={{ color: "var(--text-dim)", fontSize: 10 }}>{families.length}</span>
+              </button>
+              {expanded && families.map((family) => {
+                const familySessions = [family.root, ...family.subagents];
+                const displaySession = family.latestModified === family.root.modified ? family.root : { ...family.root, modified: family.latestModified };
+                return <div key={family.root.id} style={{ paddingLeft: 14 }}><SessionItem session={displaySession} isSelected={familySessions.some((session) => session.id === selectedSessionId)} isRunning={familySessions.some((session) => runningSessionIds.has(session.id))} isUnread={familySessions.some((session) => unreadSessionIds.has(session.id))} onClick={() => handleSelectSessionFromList(family.root)} onRenamed={loadSessions} onDeleted={(id) => { onSessionDeleted?.(id); loadSessions(); }} /></div>;
+              })}
+            </div>
+          );
+        })}
         </div>
         </SessionSearch>
       </div>
