@@ -21,6 +21,22 @@ import { SessionSearch } from "./SessionSearch";
 // height, so the list can be windowed (only the visible slice is mounted).
 const SESSION_LIST_ITEM_HEIGHT = 54;
 
+function ProjectChevron({ expanded }: { expanded: boolean }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.15s ease" }}>
+      <path d="m6 3 5 5-5 5" />
+    </svg>
+  );
+}
+
+function ProjectFolderIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <path d="M3.5 6.5A2.5 2.5 0 0 1 6 4h4l2 2.5h6A2.5 2.5 0 0 1 20.5 9v8.5A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5Z" />
+    </svg>
+  );
+}
+
 interface FileManagerAvailability {
   supported: boolean;
   reason: string | null;
@@ -1825,7 +1841,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>{t("sidebar.noSessions")}</div>
         )}
         {projectFamilies.map(({ project, families }) => {
-          const expanded = expandedSidebarProjectKeys.has(project.key) || project.key === selectedProject?.key;
+          const expanded = expandedSidebarProjectKeys.has(project.key);
           return (
             <div key={project.key} style={{ borderBottom: "1px solid var(--border)" }}>
               <button type="button" onClick={() => {
@@ -1836,7 +1852,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                   return next;
                 });
               }} style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", padding: "9px 10px", border: "none", background: project.key === selectedProject?.key ? "var(--bg-selected)" : "var(--bg-panel)", color: "var(--text)", cursor: "pointer", textAlign: "left", fontSize: 12, fontWeight: 600 }}>
-                <span aria-hidden="true">{expanded ? "⌄" : "›"}</span><span aria-hidden="true">📁</span><PathLabel text={displayCwd(project.root, homeDir)} style={{ flex: 1 }} /><span style={{ color: "var(--text-dim)", fontSize: 10 }}>{families.length}</span>
+                <ProjectChevron expanded={expanded} /><span style={{ color: project.key === selectedProject?.key ? "var(--accent)" : "var(--text-dim)", display: "flex" }}><ProjectFolderIcon /></span><PathLabel text={displayCwd(project.root, homeDir)} style={{ flex: 1 }} /><span style={{ color: "var(--text-dim)", fontSize: 10 }}>{families.length}</span>
               </button>
               {expanded && families.map((family) => {
                 const familySessions = [family.root, ...family.subagents];
