@@ -1,9 +1,10 @@
 import { enLocale } from "./messages/en";
 import { zhCNLocale } from "./messages/zh-CN";
 import { zhTWLocale } from "./messages/zh-TW";
+import { ruLocale } from "./messages/ru";
 import type { Locale, LocalePlugin } from "./types";
 
-const localePlugins: LocalePlugin[] = [enLocale, zhCNLocale, zhTWLocale];
+const localePlugins: LocalePlugin[] = [enLocale, zhCNLocale, zhTWLocale, ruLocale];
 
 /**
  * 根据标识获取已注册的语言包。
@@ -27,6 +28,7 @@ export function getSupportedLocales(): string[] {
 export function resolveBrowserLocale(languages: readonly string[]): Locale {
   for (const language of languages) {
     const normalized = language.toLowerCase();
+    if (normalized === "ru" || normalized.startsWith("ru-")) return "ru";
     if (normalized === "en" || normalized.startsWith("en-")) return "en";
     if (normalized === "zh" || normalized === "zh-cn" || normalized.startsWith("zh-cn-")
       || normalized === "zh-sg" || normalized.startsWith("zh-sg-")
